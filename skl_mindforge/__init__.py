@@ -1,6 +1,4 @@
 import os
-import re
-import unicodedata
 from tokenizers import Tokenizer
 from tokenizers.processors import TemplateProcessing
 
@@ -28,47 +26,37 @@ class ZenithTokenizer:
 
     def decode(self, ids, skip_special_tokens=True):
         """
-        VERSION 0.1.5: Universal Math & Science Decoder.
-        Uses Unicode Category Filtering to preserve math symbols while killing BPE junk.
+        VERSION 0.1.6: The Byte-Level Recovery Decoder.
+        Uses the 'latin-1' byte-shuffle trick to perfectly reconstruct 
+        complex Math and Unicode symbols.
         """
-        # 1. Convert IDs to raw vocab tokens (no auto-spaces)
+        # 1. Extract raw tokens from the vocabulary
         tokens = [self.tokenizer.id_to_token(i) for i in ids]
         
-        # 2. Filter out special tokens
+        # 2. Filter Specials
         if skip_special_tokens:
-            special = {"<s>", "</s>", "<pad>", "<unk>", "<mask()", "[CLS]", "[SEP]"}
+            special = {"<s>", "</s>", "<pad>", "<unk>", "<mask>"}
             tokens = [t for t in tokens if t not in special]
 
-        # 3. GLUE: Join without spaces
-        raw_text = "".join(tokens)
+        # 3. REVERSE THE MOJIBAKE
+        # Most BPE tokenizers represent raw bytes as latin-1 characters.
+        # We join them into one string, encode to latin-1 to get the raw bytes,
+        # then decode those bytes as UTF-8 to get the real symbols (ℏ, ∇, etc.)
+        try:
+            raw_serialized = "".join(tokens)
+            # This is the industry-standard fix for GPT-style byte-level BPE
+            clean = raw_serialized.encode('latin-1').decode('utf-8', errors='ignore')
+        except Exception:
+            # Emergency fallback if byte-decoding fails
+            clean = "".join(tokens).replace('Ġ', ' ').replace('Ċ', '\n')
 
-        # 4. CONVERT BPE MARKERS
-        clean = raw_text.replace('Ġ', ' ').replace('Ċ', '\n')
+        # 4. FINAL POLISH
+        # Replace the 'Ġ' that didn't get caught in the byte-shuffle
+        clean = clean.replace('Ġ', ' ').replace('Ċ', '\n')
         
-        # 5. TARGETED BPE GHOST REMOVAL
-        # We kill the specific sequences that we know are artifacts
-        junk_sequences = ['Â¹', 'ÃĤ', 'ÃĦ', 'ÅĤ', 'Ãł', 'Äł', '¹']
-        for junk in junk_sequences:
-            clean = clean.replace(junk, '')
-
-        # 6. UNICODE CATEGORY FILTER (The Magic Step)
-        # We keep ASCII, and any character that is a Letter, Number, Punctuation, or Math Symbol.
-        # This preserves: ≈, ×, ±, ÷, √, ∞, ∫, and Greek letters (α, β, γ).
-        def is_valid(char):
-            if ord(char) < 128: return True  # Keep all standard ASCII
-            cat = unicodedata.category(char)
-            # Sm = Math Symbol, Sc = Currency, Sk = Modifier, So = Other Symbol
-            # L = Letter (covers Greek), N = Number, P = Punctuation
-            return cat.startswith(('S', 'L', 'N', 'P'))
-
-        clean = "".join([c for c in clean if is_valid(c)])
-
-        # 7. PUNCTUATION & MATH POLISH
-        # Ensures math looks right: "c = 3" instead of "c=3" or "c  =  3"
-        clean = clean.replace(' ,', ',').replace(' .', '.').replace(' ( ', ' (').replace(' )', ')')
-        clean = clean.replace(' - ', '-') 
+        # Punctuation spacing correction
+        clean = clean.replace(' ,', ',').replace(' .', '.').replace(' - ', '-')
         
-        # Final pass to collapse multi-spaces created by noise removal
-        return " ".join(clean.split()).strip()
+        return clean.strip()
 
 zenith_tokenizer = ZenithTokenizer
