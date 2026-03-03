@@ -10,7 +10,7 @@ This tokenizer is a **proprietary asset** of the Novis project. Unlike standard 
 - **Weights/Vocabulary:** Independently trained on a 40,000 token optimized corpus.
 - **Scientific Engine:** Built-in Byte-Level recovery for 150+ mathematical and Greek symbols.
 - **License:** MIT License (Commercial licenses available for no-attribution use).
-- 💼 Commercial & Enterprise Use
+- 💼 Commercial & Enterprise Use:
 While licensed under MIT for open-source development, a Commercial Tier is available for enterprise projects requiring:
 
 Usage without legal attribution.
