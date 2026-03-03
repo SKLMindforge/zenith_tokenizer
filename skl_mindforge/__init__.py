@@ -27,38 +27,36 @@ class ZenithTokenizer:
 
     def decode(self, ids, skip_special_tokens=True):
         """
-        ULTRA-REFINED DECODER:
-        Uses a multi-stage cleaning pipeline to eliminate BPE mojibake.
+        VERSION 0.1.4: The 'Glue' Decoder.
+        Reassembles sub-tokens (Ch + ocol + ater + ie) into whole words.
         """
-        # 1. Get raw string
-        text = self.tokenizer.decode(ids, skip_special_tokens=skip_special_tokens)
+        # 1. Convert IDs to their raw strings from the vocab (no auto-spaces)
+        tokens = [self.tokenizer.id_to_token(i) for i in ids]
         
-        # 2. Level 1: Standard BPE Marker Conversion
-        text = text.replace('Ġ', ' ').replace('Ċ', '\n')
+        # 2. Filter out special tokens
+        if skip_special_tokens:
+            special = {"<s>", "</s>", "<pad>", "<unk>", "<mask()", "[CLS]", "[SEP]", "[PAD]"}
+            tokens = [t for t in tokens if t not in special]
+
+        # 3. GLUE: Join everything with NO spaces first
+        raw_text = "".join(tokens)
+
+        # 4. CONVERT BPE MARKERS: 'Ġ' becomes a space, 'Ċ' becomes newline
+        clean = raw_text.replace('Ġ', ' ').replace('Ċ', '\n')
         
-        # 3. Level 2: Comprehensive Artifact Stripping
-        # This list targets every ghost character seen in your tests
-        artifacts = [
-            'Â', '¹', 'ÃĤ', 'ÃĦ', 'ÅĤ', 'Ã', 'Å', 'ł', 'Ħ', 
-            'Ä', 'Ĥ', 'Ã', ' ', 'â', '€', '™'
-        ]
+        # 5. SURGICAL NOISE REMOVAL
+        artifacts = ['Â', '¹', 'ÃĤ', 'ÃĦ', 'ÅĤ', 'Ã', 'Å', 'ł', 'Ħ', 'Ä', 'Ĥ']
         for artifact in artifacts:
-            text = text.replace(artifact, '')
+            clean = clean.replace(artifact, '')
 
-        # 4. Level 3: Regex Scrubbing
-        # Removes any remaining standalone non-ASCII "junk" characters 
-        # that aren't standard punctuation or symbols.
-        text = re.sub(r'[^\x00-\x7F]+', '', text)
+        # 6. SCORCHED EARTH REGEX: Strip remaining non-ASCII junk
+        clean = re.sub(r'[^\x00-\x7F]+', '', clean)
 
-        # 5. Level 4: Byte-Level Reconstruction (The Safety Net)
-        try:
-            # Try one last time to heal broken UTF-8 bytes
-            text = text.encode('ascii', 'ignore').decode('ascii')
-        except:
-            pass
-
-        # 6. Final Polish
-        # Collapses multiple spaces and cleans edges
-        return " ".join(text.split()).strip()
+        # 7. PUNCTUATION POLISH: Fix spacing around symbols
+        # Reverses the "1940 , " -> "1940, " artifact
+        clean = clean.replace(' ,', ',').replace(' .', '.').replace(' ( ', ' (').replace(' )', ')')
+        clean = clean.replace(' - ', '-') # Fixes high-quality
+        
+        return clean.strip()
 
 zenith_tokenizer = ZenithTokenizer
