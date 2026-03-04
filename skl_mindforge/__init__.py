@@ -17,21 +17,23 @@ class ZenithTokenizer:
         # 2. Load Core Engine
         self.tokenizer = Tokenizer.from_file(model_path)
         
-        # 3. FIX: The Tab & Space Balance
-        # We use ByteLevel(add_prefix_space=False) which is the industry standard
-        # for GPT-style models that need to preserve code indentation/tabs.
-        self.tokenizer.pre_tokenizer = pre_tokenizers.ByteLevel(
-            add_prefix_space=False,
-            use_regex=True  # We turn this back ON to ensure \t is mapped correctly
-        )
+        # 3. FIX: THE TAB PRESERVATION SEQUENCE
+        # We use a Sequence to ensure the tab (\t) is handled as a unique unit 
+        # BEFORE the ByteLevel engine gets a chance to skip it.
+        self.tokenizer.pre_tokenizer = pre_tokenizers.Sequence([
+            # Split on tabs and keep them (isolated behavior)
+            pre_tokenizers.Split(pattern="\t", behavior="isolated"),
+            # Then apply ByteLevel to the chunks, ensuring no ghost space
+            pre_tokenizers.ByteLevel(add_prefix_space=False, use_regex=True)
+        ])
         
-        # 4. FIX: Professional Decoder (Force no-trim)
+        # 4. FIX: Professional Decoder
         self.tokenizer.decoder = decoders.ByteLevel(
             add_prefix_space=False, 
             trim_offsets=False
         )
         
-        # 5. Post-Processor
+        # 5. Post-Processor (Standard SLM format)
         self.tokenizer.post_processor = TemplateProcessing(
             single="<s> $A </s>",
             pair="<s> $A </s> <s> $B </s>",
@@ -45,7 +47,7 @@ class ZenithTokenizer:
 
     def encode(self, text):
         if not text: return []
-        # Return IDs without adding special tokens for internal logic tests
+        # add_special_tokens=False is safer for internal round-trip tests
         return self.tokenizer.encode(str(text), add_special_tokens=False).ids
 
     def decode(self, ids, skip_special_tokens=True):
