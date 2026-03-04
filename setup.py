@@ -2,7 +2,7 @@ from setuptools import setup, find_packages
 
 setup(
     name="skl_mindforge",
-    version="0.2.3", 
+    version="0.2.4", 
     packages=find_packages(),
     install_requires=["tokenizers>=0.13.0"],
     include_package_data=True,
